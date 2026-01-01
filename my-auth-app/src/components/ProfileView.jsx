@@ -5,7 +5,7 @@ function ProfileView({ username, onLogout }) {
   const [uploading, setUploading] = useState(false);
 
   const fetchProfile = async () => {
-    const res = await fetch(`http://api/profile/${username}`);
+    const res = await fetch(`/api/profile/${username}`);
     const data = await res.json();
     setProfile(data);
   };
@@ -22,7 +22,7 @@ function ProfileView({ username, onLogout }) {
     formData.append('username', username);
 
     try {
-      const res = await fetch('http://api/upload-profile-pic', {
+      const res = await fetch('/api/upload-profile-pic', {
         method: 'POST',
         body: formData,
       });
