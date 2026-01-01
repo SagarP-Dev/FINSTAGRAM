@@ -4,7 +4,7 @@ function Notifications({ username }) {
   const [notifs, setNotifs] = useState([]);
 
   useEffect(() => {
-    fetch(`http://localhost:5000/notifications/${username}`)
+    fetch(`http://api/notifications/${username}`)
       .then(res => res.json())
       .then(data => setNotifs(data));
   }, [username]);

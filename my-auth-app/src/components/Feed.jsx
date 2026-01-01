@@ -8,7 +8,7 @@ function Feed({ username }) {
   const [preview, setPreview] = useState(null);
 
   const fetchPosts = async () => {
-    const res = await fetch('http://localhost:5000/posts');
+    const res = await fetch('http://api/posts');
     const data = await res.json();
     setPosts(data);
   };
@@ -35,7 +35,7 @@ function Feed({ username }) {
     formData.append('caption', caption);
 
     try {
-      const res = await fetch('http://localhost:5000/upload', {
+      const res = await fetch('http://api/upload', {
         method: 'POST',
         body: formData,
       });

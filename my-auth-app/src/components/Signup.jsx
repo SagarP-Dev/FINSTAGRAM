@@ -6,7 +6,7 @@ function Signup({ onSwitch, setMessage }) {
   const handleSignup = async () => {
     setMessage({ text: '', type: '' });
     try {
-      const res = await fetch('http://localhost:5000/signup', {
+      const res = await fetch('http://api/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
