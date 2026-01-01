@@ -5,11 +5,11 @@ from flask_cors import CORS
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
+# Allow all origins for the demo deployment
 CORS(app, resources={r"/*": {"origins": "*"}}) 
 
-# --- Serverless Configuration ---
-# On Vercel, we must use /tmp for any file writing (DB and Uploads)
-# NOTE: These files are temporary and will be deleted when the function sleeps.
+# --- Vercel Serverless Configuration ---
+# Vercel filesystem is read-only. We MUST use /tmp for SQLite and Uploads.
 UPLOAD_FOLDER = '/tmp/uploads'
 DB_PATH = '/tmp/user.db'
 
@@ -18,13 +18,14 @@ if not os.path.exists(UPLOAD_FOLDER):
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 def get_db_connection():
-    # Helper to ensure the DB exists and connect to it
+    """Helper to ensure DB is initialized and return a connection."""
     if not os.path.exists(DB_PATH):
         init_db()
     conn = sqlite3.connect(DB_PATH)
     return conn
 
 def init_db():
+    """Creates tables if they don't exist in the temporary storage."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
@@ -59,11 +60,12 @@ def init_db():
     conn.commit()
     conn.close()
 
-# --- Routes ---
-
+# --- Utility Route to Serve Uploaded Files ---
 @app.route('/api/get_file/<filename>')
 def get_file(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+# --- Authentication Routes ---
 
 @app.route('/api/signup', methods=['POST'])
 def signup():
@@ -100,6 +102,8 @@ def login():
     conn.close()
     return jsonify({"message": "Invalid Credentials"}), 401
 
+# --- Profile Routes ---
+
 @app.route('/api/create-profile', methods=['POST'])
 def create_profile():
     data = request.json
@@ -119,8 +123,9 @@ def get_user_profile(username):
     row = cursor.fetchone()
     
     cursor.execute("SELECT filename FROM posts WHERE username=? ORDER BY id DESC", (username,))
-    # Dynamically generate the URL based on the current request host
+    # Dynamically determine host (works for localhost and vercel)
     host = request.host_url.rstrip('/')
+    
     user_posts = [{"url": f"{host}/api/get_file/{r[0]}"} for r in cursor.fetchall()]
     
     conn.close()
@@ -150,6 +155,8 @@ def upload_profile_pic():
         return jsonify({"message": "Profile picture updated!"}), 200
     return jsonify({"message": "Error"}), 400
 
+# --- Feed & Post Routes ---
+
 @app.route('/api/upload', methods=['POST'])
 def upload():
     file = request.files.get('file')
@@ -159,6 +166,7 @@ def upload():
         filename = secure_filename(file.filename)
         unique_name = f"{username}_{filename}"
         file.save(os.path.join(app.config['UPLOAD_FOLDER'], unique_name))
+        
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("INSERT INTO posts (username, filename, caption) VALUES (?, ?, ?)", (username, unique_name, caption))
@@ -173,7 +181,14 @@ def get_posts():
     cursor = conn.cursor()
     cursor.execute("SELECT username, filename, caption FROM posts ORDER BY id DESC")
     host = request.host_url.rstrip('/')
-    posts = [{"username": r[0], "url": f"{host}/api/get_file/{r[1]}", "caption": r[2]} for r in cursor.fetchall()]
+    
+    posts = []
+    for r in cursor.fetchall():
+        posts.append({
+            "username": r[0], 
+            "url": f"{host}/api/get_file/{r[1]}", 
+            "caption": r[2]
+        })
     conn.close()
     return jsonify(posts), 200
 
@@ -186,8 +201,9 @@ def get_notifications(username):
     conn.close()
     return jsonify(notifs), 200
 
-# Required for Vercel
+# Initialize DB on first load for Vercel environments
 init_db()
 
 if __name__ == '__main__':
+    # Local development use
     app.run(port=5000, debug=True)
