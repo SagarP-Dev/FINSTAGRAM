@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { API_BASE_URL } from '../config'; // Added Import
 
 function ProfileForm({ username, setMessage, onComplete }) {
   const [profile, setProfile] = useState({ full_name: '', bio: '', location: '' });
@@ -12,7 +13,8 @@ function ProfileForm({ username, setMessage, onComplete }) {
 
     setLoading(true);
     try {
-      const res = await fetch('/api/create-profile', {
+      // FIX: Changed single quotes to backticks for template literals
+      const res = await fetch(`${API_BASE_URL}/api/create-profile`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, ...profile })
@@ -29,6 +31,7 @@ function ProfileForm({ username, setMessage, onComplete }) {
         setMessage({ text: data.message, type: "error" });
       }
     } catch (err) {
+      console.error("Profile save error:", err);
       setMessage({ text: "Error saving profile", type: "error" });
     } finally {
       setLoading(false);
@@ -165,6 +168,7 @@ function ProfileForm({ username, setMessage, onComplete }) {
           <input 
             style={styles.input} 
             placeholder="What should we call you?" 
+            value={profile.full_name}
             onChange={(e) => setProfile({ ...profile, full_name: e.target.value })} 
           />
         </div>
@@ -174,6 +178,7 @@ function ProfileForm({ username, setMessage, onComplete }) {
           <textarea 
             style={styles.area} 
             placeholder="Share a bit about yourself..." 
+            value={profile.bio}
             onChange={(e) => setProfile({ ...profile, bio: e.target.value })} 
           />
         </div>
@@ -183,6 +188,7 @@ function ProfileForm({ username, setMessage, onComplete }) {
           <input 
             style={styles.input} 
             placeholder="City, Country" 
+            value={profile.location}
             onChange={(e) => setProfile({ ...profile, location: e.target.value })} 
           />
         </div>

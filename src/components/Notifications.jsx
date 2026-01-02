@@ -1,12 +1,21 @@
 import { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config'; // Import added here
 
 function Notifications({ username }) {
   const [notifs, setNotifs] = useState([]);
 
   useEffect(() => {
-    fetch(`/api/notifications/${username}`)
-      .then(res => res.json())
-      .then(data => setNotifs(data));
+    // FIX: Using backticks and API_BASE_URL
+    fetch(`${API_BASE_URL}/api/notifications/${username}`)
+      .then(res => {
+        if (!res.ok) throw new Error('Notifications not available');
+        return res.json();
+      })
+      .then(data => setNotifs(data))
+      .catch(err => {
+        console.log("Notification route might not be set up yet:", err);
+        setNotifs([]); // Fallback to empty list if route doesn't exist
+      });
   }, [username]);
 
   const styles = {
@@ -80,9 +89,11 @@ function Notifications({ username }) {
 
   // Helper to get icon based on message content
   const getIcon = (msg) => {
-    if (msg.toLowerCase().includes('like')) return '❤️';
-    if (msg.toLowerCase().includes('follow')) return '👤';
-    if (msg.toLowerCase().includes('comment')) return '💬';
+    if (!msg) return '🔔';
+    const lower = msg.toLowerCase();
+    if (lower.includes('like')) return '❤️';
+    if (lower.includes('follow')) return '👤';
+    if (lower.includes('comment')) return '💬';
     return '🔔';
   };
 
@@ -109,7 +120,9 @@ function Notifications({ username }) {
 
       <div style={styles.header}>
         <span>Notifications</span>
-        <span style={{ fontSize: '14px', color: '#0095f6', fontWeight: '600' }}>Mark all as read</span>
+        <span style={{ fontSize: '14px', color: '#0095f6', fontWeight: '600', cursor: 'pointer' }}>
+          Mark all as read
+        </span>
       </div>
 
       <div style={styles.notifList}>
@@ -117,7 +130,9 @@ function Notifications({ username }) {
           <div style={{ textAlign: 'center', marginTop: '50px' }}>
             <div style={{ fontSize: '50px', marginBottom: '10px' }}>📭</div>
             <p style={{ color: '#8e8e8e', fontWeight: '500' }}>No notifications yet</p>
-            <p style={{ color: '#c7c7c7', fontSize: '13px' }}>When people like or comment on your posts, you'll see them here.</p>
+            <p style={{ color: '#c7c7c7', fontSize: '13px' }}>
+              When people like or comment on your posts, you'll see them here.
+            </p>
           </div>
         ) : (
           notifs.map((n, i) => (
@@ -131,11 +146,15 @@ function Notifications({ username }) {
                   {n.message}
                 </p>
                 <span style={styles.time}>
-                  {new Date(n.time).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  {n.time ? new Date(n.time).toLocaleDateString(undefined, { 
+                    month: 'short', 
+                    day: 'numeric', 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                  }) : 'Just now'}
                 </span>
               </div>
 
-              {/* Blue dot for "Unread" - You can sync this with a 'is_read' database column later */}
               <div style={styles.unreadDot}></div>
             </div>
           ))
@@ -143,6 +162,6 @@ function Notifications({ username }) {
       </div>
     </div>
   );
-}
+}  
 
 export default Notifications;

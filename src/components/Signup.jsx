@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { API_BASE_URL } from '../config'; // Added missing import
 
 function Signup({ onSwitch, setMessage }) {
   const [formData, setFormData] = useState({ username: '', password: '' });
@@ -6,7 +7,8 @@ function Signup({ onSwitch, setMessage }) {
   const handleSignup = async () => {
     setMessage({ text: '', type: '' });
     try {
-      const res = await fetch('/api/signup', {
+      // FIX: Changed single quotes to backticks (`) for variable injection
+      const res = await fetch(`${API_BASE_URL}/api/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
@@ -15,6 +17,7 @@ function Signup({ onSwitch, setMessage }) {
       setMessage({ text: data.message, type: res.ok ? 'success' : 'error' });
       if (res.ok) setTimeout(onSwitch, 1500); 
     } catch (err) {
+      console.error("Signup error:", err);
       setMessage({ text: "Server offline", type: "error" });
     }
   };

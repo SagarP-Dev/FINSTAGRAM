@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { API_BASE_URL } from '../config'; // Ensure this path matches your file structure
 
 function Login({ onSwitch, onLoginSuccess, setMessage }) {
   const [formData, setFormData] = useState({ username: '', password: '' });
@@ -6,18 +7,22 @@ function Login({ onSwitch, onLoginSuccess, setMessage }) {
   const handleLogin = async () => {
     setMessage({ text: '', type: '' });
     try {
-      const res = await fetch('/api/login', {
+      // FIX: Using backticks (`) for template literals to allow variable injection
+      const res = await fetch(`${API_BASE_URL}/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
       });
+      
       const data = await res.json();
+      
       if (res.ok) {
         onLoginSuccess(data);
       } else {
-        setMessage({ text: data.message, type: 'error' });
+        setMessage({ text: data.message || "Invalid credentials", type: 'error' });
       }
     } catch (err) {
+      console.error("Login error:", err);
       setMessage({ text: "Server offline", type: "error" });
     }
   };
@@ -58,7 +63,7 @@ function Login({ onSwitch, onLoginSuccess, setMessage }) {
       margin: '10px 0',
       borderRadius: '12px',
       border: '1.5px solid #e5e7eb',
-      fontSize: '16px', // Prevents iOS zoom on focus
+      fontSize: '16px',
       transition: 'all 0.2s ease',
       outline: 'none',
       boxSizing: 'border-box'
@@ -93,7 +98,6 @@ function Login({ onSwitch, onLoginSuccess, setMessage }) {
 
   return (
     <div style={styles.container}>
-      {/* Global CSS for hover effects and responsiveness */}
       <style>
         {`
           input:focus {
@@ -131,6 +135,7 @@ function Login({ onSwitch, onLoginSuccess, setMessage }) {
             style={styles.input} 
             type="text" 
             placeholder="Enter your username" 
+            value={formData.username}
             onChange={(e) => setFormData({...formData, username: e.target.value})} 
           />
         </div>
@@ -141,6 +146,7 @@ function Login({ onSwitch, onLoginSuccess, setMessage }) {
             style={styles.input} 
             type="password" 
             placeholder="••••••••" 
+            value={formData.password}
             onChange={(e) => setFormData({...formData, password: e.target.value})} 
           />
         </div>

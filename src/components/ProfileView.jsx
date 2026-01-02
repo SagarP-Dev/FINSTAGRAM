@@ -1,16 +1,32 @@
 import { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config'; // Import added here
 
 function ProfileView({ username, onLogout }) {
   const [profile, setProfile] = useState(null);
   const [uploading, setUploading] = useState(false);
 
   const fetchProfile = async () => {
-    const res = await fetch(`/api/profile/${username}`);
-    const data = await res.json();
-    setProfile(data);
+    try {
+      // FIX: Using backticks and API_BASE_URL
+      const res = await fetch(`${API_BASE_URL}/api/profile/${username}`);
+      if (!res.ok) throw new Error("Profile not found");
+      const data = await res.json();
+      setProfile(data);
+    } catch (err) {
+      console.error("Error fetching profile:", err);
+      // Optional: Set default state if fetch fails to prevent crash
+      setProfile({
+        full_name: username,
+        bio: "Error loading profile",
+        location: "Unknown",
+        posts: []
+      });
+    }
   };
 
-  useEffect(() => { fetchProfile(); }, [username]);
+  useEffect(() => { 
+    fetchProfile(); 
+  }, [username]);
 
   const handleProfilePicChange = async (e) => {
     const file = e.target.files[0];
@@ -22,7 +38,8 @@ function ProfileView({ username, onLogout }) {
     formData.append('username', username);
 
     try {
-      const res = await fetch('/api/upload-profile-pic', {
+      // FIX: Changed single quotes to backticks
+      const res = await fetch(`${API_BASE_URL}/api/upload-profile-pic`, {
         method: 'POST',
         body: formData,
       });
@@ -84,7 +101,7 @@ function ProfileView({ username, onLogout }) {
     grid: {
       display: 'grid',
       gridTemplateColumns: 'repeat(3, 1fr)',
-      gap: '2px', // Thin grid lines like Instagram
+      gap: '2px',
       marginTop: '20px'
     },
     gridImg: { width: '100%', aspectRatio: '1/1', objectFit: 'cover', cursor: 'pointer' },
@@ -119,14 +136,14 @@ function ProfileView({ username, onLogout }) {
       {/* Header Section */}
       <div style={styles.header} className="profile-header">
         <div style={styles.avatarWrapper}>
-          <label htmlFor="pp-upload">
+          <label htmlFor="pp-upload" style={{ cursor: 'pointer' }}>
             <img 
               className="profile-img"
               src={profile.profile_pic || 'https://via.placeholder.com/150'} 
               style={styles.avatar} 
               alt="Profile" 
             />
-            <div style={styles.uploadOverlay}>+</div>
+            <div style={styles.uploadOverlay}>{uploading ? '...' : '+'}</div>
           </label>
           <input id="pp-upload" type="file" hidden onChange={handleProfilePicChange} disabled={uploading} />
         </div>
@@ -137,7 +154,7 @@ function ProfileView({ username, onLogout }) {
           </div>
           
           <ul style={styles.stats}>
-            <li style={styles.statItem}><b>{profile.posts.length}</b> posts</li>
+            <li style={styles.statItem}><b>{profile.posts?.length || 0}</b> posts</li>
             <li style={styles.statItem}><b>0</b> followers</li>
             <li style={styles.statItem}><b>0</b> following</li>
           </ul>
@@ -152,7 +169,7 @@ function ProfileView({ username, onLogout }) {
 
       {/* Grid Section */}
       <div style={styles.grid}>
-        {profile.posts.length === 0 ? (
+        {!profile.posts || profile.posts.length === 0 ? (
           <div style={{ gridColumn: 'span 3', textAlign: 'center', padding: '50px', color: '#8e8e8e' }}>
             <div style={{ fontSize: '40px' }}>📷</div>
             <p>No Posts Yet</p>

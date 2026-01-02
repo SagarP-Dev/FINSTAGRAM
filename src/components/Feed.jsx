@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config'; // Added Import
 
 function Feed({ username }) {
   const [posts, setPosts] = useState([]);
@@ -8,12 +9,19 @@ function Feed({ username }) {
   const [preview, setPreview] = useState(null);
 
   const fetchPosts = async () => {
-    const res = await fetch('/api/posts');
-    const data = await res.json();
-    setPosts(data);
+    try {
+      // FIX: Changed single quotes to backticks for template literals
+      const res = await fetch(`${API_BASE_URL}/api/posts`);
+      const data = await res.json();
+      setPosts(data);
+    } catch (err) {
+      console.error("Failed to fetch posts:", err);
+    }
   };
 
-  useEffect(() => { fetchPosts(); }, []);
+  useEffect(() => { 
+    fetchPosts(); 
+  }, []);
 
   // Handle previewing the image before upload
   const handleFileChange = (e) => {
@@ -35,7 +43,8 @@ function Feed({ username }) {
     formData.append('caption', caption);
 
     try {
-      const res = await fetch('/api/upload', {
+      // FIX: Changed single quotes to backticks for template literals
+      const res = await fetch(`${API_BASE_URL}/api/upload`, {
         method: 'POST',
         body: formData,
       });
@@ -64,7 +73,7 @@ function Feed({ username }) {
     },
     postCard: {
       background: '#ffffff',
-      borderRadius: '0px', // Square for native feel on mobile, can be changed to 20px
+      borderRadius: '0px', 
       marginBottom: '25px',
       border: '1px solid #efefef',
       overflow: 'hidden'
@@ -109,7 +118,7 @@ function Feed({ username }) {
         </div>
 
         {preview && (
-          <img src={preview} style={{ width: '100px', height: '100px', borderRadius: '10px', objectFit: 'cover', marginBottom: '10px' }} />
+          <img src={preview} alt="Preview" style={{ width: '100px', height: '100px', borderRadius: '10px', objectFit: 'cover', marginBottom: '10px' }} />
         )}
 
         <input type="file" accept="image/*" onChange={handleFileChange} style={{ marginBottom: '10px', fontSize: '12px' }} />
@@ -137,33 +146,39 @@ function Feed({ username }) {
 
       {/* Posts Feed */}
       <div className="feed-container">
-        {posts.map((post, index) => (
-          <div key={index} className="post-card" style={styles.postCard}>
-            {/* Post Header */}
-            <div style={{ padding: '12px', display: 'flex', alignItems: 'center' }}>
-              <div style={styles.avatar}>
-                <div style={{ background: 'white', width: '100%', height: '100%', borderRadius: '50%', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '10px' }}>
-                  👤
+        {posts.length === 0 ? (
+          <p style={{ textAlign: 'center', color: '#8e8e8e', marginTop: '20px' }}>No posts yet. Be the first to share!</p>
+        ) : (
+          posts.map((post, index) => (
+            <div key={index} className="post-card" style={styles.postCard}>
+              {/* Post Header */}
+              <div style={{ padding: '12px', display: 'flex', alignItems: 'center' }}>
+                <div style={styles.avatar}>
+                  <div style={{ background: 'white', width: '100%', height: '100%', borderRadius: '50%', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '10px' }}>
+                    👤
+                  </div>
                 </div>
+                <span style={{ fontWeight: '600', fontSize: '14px' }}>{post.username}</span>
               </div>
-              <span style={{ fontWeight: '600', fontSize: '14px' }}>{post.username}</span>
-            </div>
 
-            {/* Post Image */}
-            <img src={post.url} alt="Post content" style={styles.postImg} onDoubleClick={() => alert('Liked!')} />
+              {/* Post Image */}
+              <img src={post.url} alt="Post content" style={styles.postImg} onDoubleClick={() => alert('Liked!')} />
 
-            {/* Post Interactions (Visual only for now) */}
-            <div style={{ padding: '12px 12px 5px 12px', fontSize: '20px', display: 'flex', gap: '15px' }}>
-              <span>🤍</span> <span>💬</span> <span>✈️</span>
-            </div>
+              {/* Post Interactions */}
+              <div style={{ padding: '12px 12px 5px 12px', fontSize: '20px', display: 'flex', gap: '15px' }}>
+                <span style={{ cursor: 'pointer' }}>🤍</span> 
+                <span style={{ cursor: 'pointer' }}>💬</span> 
+                <span style={{ cursor: 'pointer' }}>✈️</span>
+              </div>
 
-            {/* Post Caption */}
-            <div style={{ padding: '0 12px 15px 12px', fontSize: '14px', lineHeight: '1.4' }}>
-              <span style={{ fontWeight: '600', marginRight: '8px' }}>{post.username}</span> 
-              {post.caption}
+              {/* Post Caption */}
+              <div style={{ padding: '0 12px 15px 12px', fontSize: '14px', lineHeight: '1.4' }}>
+                <span style={{ fontWeight: '600', marginRight: '8px' }}>{post.username}</span> 
+                {post.caption}
+              </div>
             </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
     </div>
   );

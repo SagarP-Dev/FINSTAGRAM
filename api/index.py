@@ -1,159 +1,128 @@
-import sqlite3
 import os
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
+from pymongo import MongoClient
+from datetime import datetime
+from dotenv import load_dotenv
+from bson import ObjectId
+
+# Load variables from .env file
+load_dotenv()
 
 app = Flask(__name__)
-# Allow all origins for the demo deployment
-CORS(app, resources={r"/*": {"origins": "*"}}) 
+# Enable CORS for all routes and origins to fix "Server Offline" issues
+CORS(app, resources={r"/*": {"origins": "*"}})
 
-# --- Vercel Serverless Configuration ---
-# Vercel filesystem is read-only. We MUST use /tmp for SQLite and Uploads.
-UPLOAD_FOLDER = '/tmp/uploads'
-DB_PATH = '/tmp/user.db'
+# --- MongoDB Configuration ---
+MONGO_URI = os.getenv("MONGO_URI")
 
+try:
+    client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
+    db = client['finstagram_db']
+    # Trigger a connection check
+    client.server_info() 
+    print("✅ Connected to MongoDB successfully!")
+except Exception as e:
+    print(f"❌ MongoDB Connection Error: {e}")
+
+# --- File Storage ---
+UPLOAD_FOLDER = 'uploads'
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-
-def get_db_connection():
-    """Helper to ensure DB is initialized and return a connection."""
-    if not os.path.exists(DB_PATH):
-        init_db()
-    conn = sqlite3.connect(DB_PATH)
-    return conn
-
-def init_db():
-    """Creates tables if they don't exist in the temporary storage."""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    
-    cursor.execute('''CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, 
-        username TEXT UNIQUE, 
-        password TEXT)''')
-    
-    cursor.execute('''CREATE TABLE IF NOT EXISTS profiles (
-        username TEXT PRIMARY KEY, 
-        full_name TEXT, 
-        bio TEXT, 
-        location TEXT,
-        profile_pic TEXT, 
-        FOREIGN KEY(username) REFERENCES users(username))''')
-    
-    cursor.execute('''CREATE TABLE IF NOT EXISTS posts (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT,
-        filename TEXT,
-        caption TEXT,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)''')
-    
-    cursor.execute('''CREATE TABLE IF NOT EXISTS notifications (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT,
-        message TEXT,
-        type TEXT,
-        is_read INTEGER DEFAULT 0,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)''')
-    
-    conn.commit()
-    conn.close()
-
-# --- Utility Route to Serve Uploaded Files ---
-@app.route('/api/get_file/<filename>')
-def get_file(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 # --- Authentication Routes ---
 
 @app.route('/api/signup', methods=['POST'])
 def signup():
     data = request.json
-    conn = get_db_connection()
-    try:
-        cursor = conn.cursor()
-        cursor.execute("INSERT INTO users (username, password) VALUES (?, ?)", (data['username'], data['password']))
-        conn.commit()
-        return jsonify({"message": "Signup successful!"}), 201
-    except sqlite3.IntegrityError:
+    if not data or 'username' not in data or 'password' not in data:
+        return jsonify({"message": "Username and password required"}), 400
+        
+    if db.users.find_one({"username": data['username']}):
         return jsonify({"message": "Username already exists"}), 400
-    finally:
-        conn.close()
+    
+    db.users.insert_one({
+        "username": data['username'],
+        "password": data['password'],
+        "created_at": datetime.utcnow()
+    })
+    return jsonify({"message": "Signup successful!"}), 201
 
 @app.route('/api/login', methods=['POST'])
 def login():
     data = request.json
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE username=? AND password=?", (data['username'], data['password']))
-    user = cursor.fetchone()
+    user = db.users.find_one({"username": data['username'], "password": data['password']})
     
     if user:
-        cursor.execute("SELECT * FROM profiles WHERE username=?", (data['username'],))
-        profile = cursor.fetchone()
-        conn.close()
+        profile = db.profiles.find_one({"username": data['username']})
         return jsonify({
             "message": "Login Successful!", 
             "username": data['username'],
             "hasProfile": True if profile else False
         }), 200
     
-    conn.close()
     return jsonify({"message": "Invalid Credentials"}), 401
 
 # --- Profile Routes ---
 
+@app.route('/api/profile/<username>', methods=['GET'])
+def get_profile(username):
+    profile = db.profiles.find_one({"username": username})
+    if not profile:
+        return jsonify({"message": "Profile not found"}), 404
+    
+    # Get user's posts
+    host = request.host_url.rstrip('/')
+    posts_cursor = db.posts.find({"username": username}).sort("timestamp", -1)
+    posts = [{
+        "url": f"{host}/api/get_file/{p['filename']}", 
+        "caption": p.get('caption', ''),
+        "time": p.get('timestamp')
+    } for p in posts_cursor]
+
+    return jsonify({
+        "full_name": profile.get('full_name'),
+        "bio": profile.get('bio'),
+        "location": profile.get('location'),
+        "profile_pic": profile.get('profile_pic'),
+        "posts": posts
+    }), 200
+
 @app.route('/api/create-profile', methods=['POST'])
 def create_profile():
     data = request.json
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("INSERT OR REPLACE INTO profiles (username, full_name, bio, location) VALUES (?, ?, ?, ?)", 
-                   (data['username'], data['full_name'], data['bio'], data['location']))
-    conn.commit()
-    conn.close()
+    db.profiles.update_one(
+        {"username": data['username']},
+        {"$set": {
+            "full_name": data.get('full_name'),
+            "bio": data.get('bio'),
+            "location": data.get('location')
+        }},
+        upsert=True
+    )
     return jsonify({"message": "Profile saved!"}), 200
-
-@app.route('/api/profile/<username>', methods=['GET'])
-def get_user_profile(username):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT full_name, bio, location, profile_pic FROM profiles WHERE username=?", (username,))
-    row = cursor.fetchone()
-    
-    cursor.execute("SELECT filename FROM posts WHERE username=? ORDER BY id DESC", (username,))
-    # Dynamically determine host (works for localhost and vercel)
-    host = request.host_url.rstrip('/')
-    
-    user_posts = [{"url": f"{host}/api/get_file/{r[0]}"} for r in cursor.fetchall()]
-    
-    conn.close()
-    if row:
-        return jsonify({
-            "full_name": row[0],
-            "bio": row[1],
-            "location": row[2],
-            "profile_pic": f"{host}/api/get_file/{row[3]}" if row[3] else None,
-            "posts": user_posts
-        }), 200
-    return jsonify({"message": "Profile not found"}), 404
 
 @app.route('/api/upload-profile-pic', methods=['POST'])
 def upload_profile_pic():
     file = request.files.get('file')
     username = request.form.get('username')
-    if file:
-        filename = secure_filename(f"avatar_{username}_{file.filename}")
-        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+    if file and username:
+        filename = secure_filename(f"profile_{username}_{file.filename}")
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(file_path)
         
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("UPDATE profiles SET profile_pic=? WHERE username=?", (filename, username))
-        conn.commit()
-        conn.close()
+        host = request.host_url.rstrip('/')
+        url = f"{host}/api/get_file/{filename}"
+        
+        db.profiles.update_one(
+            {"username": username},
+            {"$set": {"profile_pic": url}},
+            upsert=True
+        )
         return jsonify({"message": "Profile picture updated!"}), 200
-    return jsonify({"message": "Error"}), 400
+    return jsonify({"message": "Upload failed"}), 400
 
 # --- Feed & Post Routes ---
 
@@ -163,47 +132,56 @@ def upload():
     username = request.form.get('username')
     caption = request.form.get('caption')
     if file:
-        filename = secure_filename(file.filename)
-        unique_name = f"{username}_{filename}"
-        file.save(os.path.join(app.config['UPLOAD_FOLDER'], unique_name))
+        filename = secure_filename(f"{username}_{file.filename}")
+        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
         
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("INSERT INTO posts (username, filename, caption) VALUES (?, ?, ?)", (username, unique_name, caption))
-        conn.commit()
-        conn.close()
+        db.posts.insert_one({
+            "username": username,
+            "filename": filename,
+            "caption": caption,
+            "timestamp": datetime.utcnow()
+        })
         return jsonify({"message": "Posted!"}), 201
     return jsonify({"message": "Error"}), 400
 
 @app.route('/api/posts', methods=['GET'])
 def get_posts():
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT username, filename, caption FROM posts ORDER BY id DESC")
     host = request.host_url.rstrip('/')
-    
+    posts_cursor = db.posts.find().sort("timestamp", -1)
     posts = []
-    for r in cursor.fetchall():
+    for p in posts_cursor:
+        # Fetch profile for the avatar
+        profile = db.profiles.find_one({"username": p['username']})
         posts.append({
-            "username": r[0], 
-            "url": f"{host}/api/get_file/{r[1]}", 
-            "caption": r[2]
+            "username": p['username'],
+            "url": f"{host}/api/get_file/{p['filename']}", 
+            "caption": p.get('caption', ''),
+            "avatar": profile.get('profile_pic') if profile else None,
+            "time": p.get('timestamp')
         })
-    conn.close()
     return jsonify(posts), 200
+
+@app.route('/api/get_file/<filename>')
+def get_file(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
+
+# --- Notifications ---
 
 @app.route('/api/notifications/<username>', methods=['GET'])
 def get_notifications(username):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT message, timestamp FROM notifications WHERE username=? ORDER BY id DESC", (username,))
-    notifs = [{"message": r[0], "time": r[1]} for r in cursor.fetchall()]
-    conn.close()
-    return jsonify(notifs), 200
+    # Dummy notifications for now so the frontend doesn't show "Offline"
+    notifications = [
+        {"message": "Welcome to Finstagram!", "time": datetime.utcnow()},
+        {"message": "Try uploading your first photo!", "time": datetime.utcnow()}
+    ]
+    return jsonify(notifications), 200
 
-# Initialize DB on first load for Vercel environments
-init_db()
+# --- System ---
+
+@app.route('/')
+def health_check():
+    return "Backend is Running", 200
 
 if __name__ == '__main__':
-    # Local development use
-    app.run(port=5000, debug=True)
+    # Running on 0.0.0.0 makes it accessible on your local network
+    app.run(host='0.0.0.0', port=5000, debug=True)
