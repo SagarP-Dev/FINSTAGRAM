@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { API_BASE_URL } from '../config'; // Ensure this path matches your file structure
+import { API_BASE_URL } from '../config';
 
 function Login({ onSwitch, onLoginSuccess, setMessage }) {
   const [formData, setFormData] = useState({ username: '', password: '' });
@@ -36,7 +36,7 @@ function Login({ onSwitch, onLoginSuccess, setMessage }) {
     },
     card: {
       background: 'rgba(255, 255, 255, 0.95)',
-      backdropFilter: 'blur(10px)',
+      backdropFilter: 'blur(20px)',
       padding: '40px 30px',
       borderRadius: '24px',
       textAlign: 'center',

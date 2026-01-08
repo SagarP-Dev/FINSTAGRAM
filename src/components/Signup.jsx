@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { API_BASE_URL } from '../config'; // Added missing import
+import { API_BASE_URL } from '../config'; 
 
 function Signup({ onSwitch, setMessage }) {
   const [formData, setFormData] = useState({ username: '', password: '' });
@@ -31,7 +31,7 @@ function Signup({ onSwitch, setMessage }) {
     },
     card: {
       background: 'rgba(255, 255, 255, 0.95)',
-      backdropFilter: 'blur(10px)',
+      backdropFilter: 'blur(20px)',
       padding: '40px 30px',
       borderRadius: '24px',
       textAlign: 'center',
