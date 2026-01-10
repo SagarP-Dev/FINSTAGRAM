@@ -3,11 +3,13 @@ import Login from './components/Login';
 import Signup from './components/Signup';
 import ProfileForm from './components/ProfileForm';
 import Feed from './components/Feed';
+import Reels from './components/Reels';
+import Messages from './components/Messages';
 import ProfileView from './components/ProfileView';
 import Notifications from './components/Notifications';
 import { API_BASE_URL } from './config'; 
 
-// --- Static Styles (Placed outside the component) ---
+// --- Static Styles ---
 const wrapperStyle = (view) => ({
   display: 'flex',
   flexDirection: 'column',
@@ -41,26 +43,45 @@ const navBarStyle = {
 const navIconStyle = (active) => ({
   background: 'none',
   border: 'none',
-  fontSize: '26px',
+  fontSize: '24px',
   cursor: 'pointer',
   opacity: active ? 1 : 0.3,
   transform: active ? 'scale(1.1)' : 'scale(1)',
   transition: 'all 0.2s ease',
-  padding: '10px'
+  padding: '10px',
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center'
 });
 
 function App() {
-  // 1. All State declarations must be at the top of the function
-  const [view, setView] = useState('login'); 
-  const [currentUser, setCurrentUser] = useState(null);
+  // --- 1. State Initialization with LocalStorage ---
+  const [currentUser, setCurrentUser] = useState(() => {
+    return localStorage.getItem('finstagram_user') || null;
+  });
+
+  const [view, setView] = useState(() => {
+    const savedUser = localStorage.getItem('finstagram_user');
+    const savedView = localStorage.getItem('finstagram_view');
+    // If logged in, go to saved view or feed. If not, go to login.
+    return savedUser ? (savedView || 'feed') : 'login';
+  });
+
   const [message, setMessage] = useState({ text: '', type: '' });
 
-  // 2. Debug Effect
+  // --- 2. Effects ---
   useEffect(() => {
     console.log("Connecting to backend at:", API_BASE_URL);
   }, []);
 
-  // 3. Message auto-hide Effect
+  // Persist the current view whenever it changes
+  useEffect(() => {
+    if (currentUser) {
+      localStorage.setItem('finstagram_view', view);
+    }
+  }, [view, currentUser]);
+
+  // Message auto-hide
   useEffect(() => {
     if (message.text) {
       const timer = setTimeout(() => setMessage({ text: '', type: '' }), 3000);
@@ -68,9 +89,11 @@ function App() {
     }
   }, [message]);
 
-  // --- Handlers ---
+  // --- 3. Handlers ---
   const handleLoginSuccess = (userData) => {
     setCurrentUser(userData.username);
+    localStorage.setItem('finstagram_user', userData.username);
+    
     if (userData.hasProfile) {
       setView('feed');
     } else {
@@ -86,6 +109,8 @@ function App() {
 
   const handleLogout = () => {
     setCurrentUser(null);
+    localStorage.removeItem('finstagram_user');
+    localStorage.removeItem('finstagram_view');
     setView('login');
     setMessage({ text: 'Logged out successfully', type: 'success' });
   };
@@ -99,6 +124,7 @@ function App() {
         marginTop: ['login', 'signup'].includes(view) ? '10vh' : '0'
       }}>
         
+        {/* Global Toast Messages */}
         {message.text && (
           <div style={{
             position: 'fixed',
@@ -112,19 +138,26 @@ function App() {
           </div>
         )}
 
+        {/* View Switcher */}
         {view === 'login' && <Login onSwitch={() => setView('signup')} onLoginSuccess={handleLoginSuccess} setMessage={setMessage} />}
         {view === 'signup' && <Signup onSwitch={() => setView('login')} setMessage={setMessage} />}
         {view === 'profileSetup' && <ProfileForm username={currentUser} onComplete={handleProfileComplete} setMessage={setMessage} />}
+        
         {view === 'feed' && <Feed username={currentUser} />}
+        {view === 'reels' && <Reels username={currentUser} />}
+        {view === 'messages' && <Messages currentUser={currentUser} />}
         {view === 'notifications' && <Notifications username={currentUser} />}
         {view === 'profile' && <ProfileView username={currentUser} onLogout={handleLogout} />}
       </div>
 
-      {['feed', 'notifications', 'profile'].includes(view) && (
+      {/* Navigation Bar (Visible only when logged in) */}
+      {['feed', 'reels', 'messages', 'notifications', 'profile'].includes(view) && (
         <div style={navBarStyle}>
-          <button style={navIconStyle(view === 'feed')} onClick={() => setView('feed')}>🏠</button>
-          <button style={navIconStyle(view === 'notifications')} onClick={() => setView('notifications')}>🔔</button>
-          <button style={navIconStyle(view === 'profile')} onClick={() => setView('profile')}>👤</button>
+          <button style={navIconStyle(view === 'feed')} onClick={() => setView('feed')} title="Home">🏠</button>
+          <button style={navIconStyle(view === 'reels')} onClick={() => setView('reels')} title="Reels">🎬</button>
+          <button style={navIconStyle(view === 'messages')} onClick={() => setView('messages')} title="Messages">✉️</button>
+          <button style={navIconStyle(view === 'notifications')} onClick={() => setView('notifications')} title="Notifications">🔔</button>
+          <button style={navIconStyle(view === 'profile')} onClick={() => setView('profile')} title="Profile">👤</button>
         </div>
       )}
     </div>

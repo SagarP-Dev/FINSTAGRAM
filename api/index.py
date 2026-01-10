@@ -26,11 +26,14 @@ try:
 except Exception as e:
     print(f"❌ MongoDB Connection Error: {e}")
 
-# --- File Storage ---
+# --- File Storage Configuration ---
 UPLOAD_FOLDER = 'uploads'
 if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
+# List of common video extensions for the Reels section
+VIDEO_EXTENSIONS = {'.mp4', '.mov', '.avi', '.webm', '.mkv'}
 
 # --- Authentication Routes ---
 
@@ -79,7 +82,8 @@ def get_profile(username):
     posts = [{
         "url": f"{host}/api/get_file/{p['filename']}", 
         "caption": p.get('caption', ''),
-        "time": p.get('timestamp')
+        "time": p.get('timestamp'),
+        "is_video": any(p['filename'].lower().endswith(ext) for ext in VIDEO_EXTENSIONS)
     } for p in posts_cursor]
 
     return jsonify({
@@ -124,7 +128,56 @@ def upload_profile_pic():
         return jsonify({"message": "Profile picture updated!"}), 200
     return jsonify({"message": "Upload failed"}), 400
 
-# --- Feed & Post Routes ---
+# --- Messaging Routes ---
+
+@app.route('/api/messages/<current_user>/<other_user>', methods=['GET'])
+def get_messages(current_user, other_user):
+    # Fetch all messages between the two users (sent or received)
+    messages_cursor = db.messages.find({
+        "$or": [
+            {"sender": current_user, "receiver": other_user},
+            {"sender": other_user, "receiver": current_user}
+        ]
+    }).sort("timestamp", 1)
+    
+    messages = []
+    for m in messages_cursor:
+        messages.append({
+            "sender": m['sender'],
+            "receiver": m['receiver'],
+            "text": m['text'],
+            "timestamp": m['timestamp']
+        })
+    return jsonify(messages), 200
+
+@app.route('/api/send-message', methods=['POST'])
+def send_message():
+    data = request.json
+    if not data or 'sender' not in data or 'receiver' not in data or 'text' not in data:
+        return jsonify({"message": "Incomplete message data"}), 400
+        
+    db.messages.insert_one({
+        "sender": data['sender'],
+        "receiver": data['receiver'],
+        "text": data['text'],
+        "timestamp": datetime.utcnow()
+    })
+    return jsonify({"message": "Message sent!"}), 201
+
+@app.route('/api/chat-list/<username>', methods=['GET'])
+def get_chat_list(username):
+    # This fetches all other users so you can start a chat with them
+    users_cursor = db.users.find({"username": {"$ne": username}}, {"username": 1})
+    chat_list = []
+    for u in users_cursor:
+        profile = db.profiles.find_one({"username": u['username']})
+        chat_list.append({
+            "username": u['username'],
+            "avatar": profile.get('profile_pic') if profile else None
+        })
+    return jsonify(chat_list), 200
+
+# --- Feed, Post & Reels Routes ---
 
 @app.route('/api/upload', methods=['POST'])
 def upload():
@@ -132,7 +185,7 @@ def upload():
     username = request.form.get('username')
     caption = request.form.get('caption')
     if file:
-        filename = secure_filename(f"{username}_{file.filename}")
+        filename = secure_filename(f"{username}_{datetime.now().timestamp()}_{file.filename}")
         file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
         
         db.posts.insert_one({
@@ -150,16 +203,33 @@ def get_posts():
     posts_cursor = db.posts.find().sort("timestamp", -1)
     posts = []
     for p in posts_cursor:
-        # Fetch profile for the avatar
         profile = db.profiles.find_one({"username": p['username']})
         posts.append({
             "username": p['username'],
             "url": f"{host}/api/get_file/{p['filename']}", 
             "caption": p.get('caption', ''),
             "avatar": profile.get('profile_pic') if profile else None,
-            "time": p.get('timestamp')
+            "time": p.get('timestamp'),
+            "is_video": any(p['filename'].lower().endswith(ext) for ext in VIDEO_EXTENSIONS)
         })
     return jsonify(posts), 200
+
+@app.route('/api/reels', methods=['GET'])
+def get_reels():
+    host = request.host_url.rstrip('/')
+    posts_cursor = db.posts.find().sort("timestamp", -1)
+    reels = []
+    for p in posts_cursor:
+        if any(p['filename'].lower().endswith(ext) for ext in VIDEO_EXTENSIONS):
+            profile = db.profiles.find_one({"username": p['username']})
+            reels.append({
+                "username": p['username'],
+                "url": f"{host}/api/get_file/{p['filename']}", 
+                "caption": p.get('caption', ''),
+                "avatar": profile.get('profile_pic') if profile else None,
+                "time": p.get('timestamp')
+            })
+    return jsonify(reels), 200
 
 @app.route('/api/get_file/<filename>')
 def get_file(filename):
@@ -169,10 +239,10 @@ def get_file(filename):
 
 @app.route('/api/notifications/<username>', methods=['GET'])
 def get_notifications(username):
-    # Dummy notifications for now so the frontend doesn't show "Offline"
     notifications = [
         {"message": "Welcome to Finstagram!", "time": datetime.utcnow()},
-        {"message": "Try uploading your first photo!", "time": datetime.utcnow()}
+        {"message": "Try uploading your first Reel!", "time": datetime.utcnow()},
+        {"message": "Check your messages to chat with friends!", "time": datetime.utcnow()}
     ]
     return jsonify(notifications), 200
 
@@ -183,5 +253,4 @@ def health_check():
     return "Backend is Running", 200
 
 if __name__ == '__main__':
-    # accessible on your local network
     app.run(host='0.0.0.0', port=5000, debug=True)

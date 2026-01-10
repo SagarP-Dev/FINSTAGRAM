@@ -1,35 +1,32 @@
-import { useState, useEffect } from 'react';
-import { API_BASE_URL } from '../config'; // Added Import
+import { useState, useEffect } from "react";
+import { API_BASE_URL } from "../config";
 
 function Feed({ username }) {
   const [posts, setPosts] = useState([]);
   const [file, setFile] = useState(null);
-  const [caption, setCaption] = useState('');
+  const [caption, setCaption] = useState("");
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState(null);
+  const [likes, setLikes] = useState({});
 
   const fetchPosts = async () => {
     try {
-      // FIX: Changed single quotes to backticks for template literals
       const res = await fetch(`${API_BASE_URL}/api/posts`);
       const data = await res.json();
-      setPosts(data);
+      setPosts(data.reverse());
     } catch (err) {
       console.error("Failed to fetch posts:", err);
     }
   };
 
-  useEffect(() => { 
-    fetchPosts(); 
+  useEffect(() => {
+    fetchPosts();
   }, []);
 
-  // Handle previewing the image before upload
   const handleFileChange = (e) => {
-    const selectedFile = e.target.files[0];
-    setFile(selectedFile);
-    if (selectedFile) {
-      setPreview(URL.createObjectURL(selectedFile));
-    }
+    const selected = e.target.files[0];
+    setFile(selected);
+    if (selected) setPreview(URL.createObjectURL(selected));
   };
 
   const handleUpload = async (e) => {
@@ -38,20 +35,20 @@ function Feed({ username }) {
 
     setUploading(true);
     const formData = new FormData();
-    formData.append('file', file);
-    formData.append('username', username);
-    formData.append('caption', caption);
+    formData.append("file", file);
+    formData.append("username", username);
+    formData.append("caption", caption);
 
     try {
-      // FIX: Changed single quotes to backticks for template literals
       const res = await fetch(`${API_BASE_URL}/api/upload`, {
-        method: 'POST',
+        method: "POST",
         body: formData,
       });
+
       if (res.ok) {
         setFile(null);
         setPreview(null);
-        setCaption('');
+        setCaption("");
         fetchPosts();
       }
     } catch (err) {
@@ -61,125 +58,186 @@ function Feed({ username }) {
     }
   };
 
-  const styles = {
-    container: { maxWidth: '500px', margin: '0 auto', width: '100%', padding: '10px 0' },
-    uploadCard: {
-      background: '#ffffff',
-      padding: '20px',
-      borderRadius: '20px',
-      marginBottom: '20px',
-      boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
-      border: '1px solid #efefef',
-    },
-    postCard: {
-      background: '#ffffff',
-      borderRadius: '0px', 
-      marginBottom: '25px',
-      border: '1px solid #efefef',
-      overflow: 'hidden'
-    },
-    avatar: {
-      width: '32px',
-      height: '32px',
-      borderRadius: '50%',
-      background: 'linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888)',
-      padding: '2px',
-      marginRight: '10px'
-    },
-    postImg: { width: '100%', display: 'block', maxHeight: '600px', objectFit: 'cover' },
-    input: {
-      width: '100%',
-      padding: '12px',
-      border: '1px solid #efefef',
-      borderRadius: '10px',
-      background: '#fafafa',
-      marginBottom: '10px',
-      outline: 'none'
-    }
+  const toggleLike = (id) => {
+    setLikes((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
   };
 
   return (
-    <div style={styles.container}>
-      <style>
-        {`
-          .feed-container { animation: fadeIn 0.5s ease-in; }
-          @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-          @media (max-width: 500px) {
-            .post-card { border-left: none; border-right: none; border-radius: 0; }
-          }
-        `}
-      </style>
+    <div className="feed-wrapper">
+      <style>{`
+        .feed-wrapper {
+          max-width: 480px;
+          margin: auto;
+          padding: 12px;
+        }
 
-      {/* Modern Upload Section */}
-      <div style={styles.uploadCard}>
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: '15px' }}>
-          <div style={{ ...styles.avatar, background: '#eee' }}></div>
-          <span style={{ fontWeight: '600', fontSize: '14px' }}>Share something, {username}?</span>
+        @media (min-width: 768px) {
+          .feed-wrapper {
+            max-width: 520px;
+          }
+        }
+
+        .upload-card {
+          background: #fff;
+          padding: 16px;
+          border-radius: 16px;
+          margin-bottom: 20px;
+          border: 1px solid #efefef;
+        }
+
+        .avatar {
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          background: linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);
+          padding: 2px;
+          margin-right: 10px;
+        }
+
+        .avatar-inner {
+          background: white;
+          width: 100%;
+          height: 100%;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 14px;
+        }
+
+        .post-card {
+          background: #fff;
+          border: 1px solid #efefef;
+          margin-bottom: 24px;
+          overflow: hidden;
+        }
+
+        .post-image {
+          width: 100%;
+          max-height: 520px;
+          object-fit: cover;
+        }
+
+        .actions span {
+          cursor: pointer;
+          font-size: 22px;
+        }
+      `}</style>
+
+      {/* Upload Section */}
+      <div className="upload-card">
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 12 }}>
+          <div className="avatar">
+            <div className="avatar-inner">👤</div>
+          </div>
+          <strong>{username}</strong>
         </div>
 
         {preview && (
-          <img src={preview} alt="Preview" style={{ width: '100px', height: '100px', borderRadius: '10px', objectFit: 'cover', marginBottom: '10px' }} />
+          <img
+            src={preview}
+            alt="preview"
+            style={{
+              width: "100%",
+              maxHeight: "200px",
+              objectFit: "cover",
+              borderRadius: "12px",
+              marginBottom: "10px",
+            }}
+          />
         )}
 
-        <input type="file" accept="image/*" onChange={handleFileChange} style={{ marginBottom: '10px', fontSize: '12px' }} />
-        
-        <input 
-          style={styles.input}
-          placeholder="Write a caption..." 
-          value={caption} 
-          onChange={(e) => setCaption(e.target.value)}
+        <input
+          type="file"
+          accept="image/*"
+          onChange={handleFileChange}
+          style={{ marginBottom: 8 }}
         />
-        
-        <button 
-          onClick={handleUpload} 
-          disabled={uploading || !file}
+
+        <input
+          value={caption}
+          onChange={(e) => setCaption(e.target.value)}
+          placeholder="Write a caption..."
           style={{
-            width: '100%', padding: '12px', 
-            background: uploading || !file ? '#b2dffc' : '#0095f6', 
-            color: 'white', border: 'none', borderRadius: '10px', 
-            fontWeight: 'bold', cursor: 'pointer', transition: '0.2s'
+            width: "100%",
+            padding: "10px",
+            borderRadius: "10px",
+            border: "1px solid #ddd",
+            marginBottom: "10px",
+            background: "#fafafa",
+          }}
+        />
+
+        <button
+          onClick={handleUpload}
+          disabled={!file || uploading}
+          style={{
+            width: "100%",
+            padding: "12px",
+            borderRadius: "10px",
+            border: "none",
+            background: uploading ? "#b2dffc" : "#0095f6",
+            color: "#fff",
+            fontWeight: "bold",
           }}
         >
-          {uploading ? 'Posting...' : 'Post'}
+          {uploading ? "Posting..." : "Post"}
         </button>
       </div>
 
       {/* Posts Feed */}
-      <div className="feed-container">
-        {posts.length === 0 ? (
-          <p style={{ textAlign: 'center', color: '#8e8e8e', marginTop: '20px' }}>No posts yet. Be the first to share!</p>
-        ) : (
-          posts.map((post, index) => (
-            <div key={index} className="post-card" style={styles.postCard}>
-              {/* Post Header */}
-              <div style={{ padding: '12px', display: 'flex', alignItems: 'center' }}>
-                <div style={styles.avatar}>
-                  <div style={{ background: 'white', width: '100%', height: '100%', borderRadius: '50%', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '10px' }}>
-                    👤
-                  </div>
-                </div>
-                <span style={{ fontWeight: '600', fontSize: '14px' }}>{post.username}</span>
+      {posts.length === 0 ? (
+        <p style={{ textAlign: "center", color: "#888" }}>
+          No posts yet 👀
+        </p>
+      ) : (
+        posts.map((post, index) => (
+          <div className="post-card" key={index}>
+            {/* Header */}
+            <div style={{ display: "flex", alignItems: "center", padding: 12 }}>
+              <div className="avatar">
+                <div className="avatar-inner">👤</div>
               </div>
-
-              {/* Post Image */}
-              <img src={post.url} alt="Post content" style={styles.postImg} onDoubleClick={() => alert('Liked!')} />
-
-              {/* Post Interactions */}
-              <div style={{ padding: '12px 12px 5px 12px', fontSize: '20px', display: 'flex', gap: '15px' }}>
-                <span style={{ cursor: 'pointer' }}>🤍</span> 
-                <span style={{ cursor: 'pointer' }}>💬</span> 
-                <span style={{ cursor: 'pointer' }}>✈️</span>
-              </div>
-
-              {/* Post Caption */}
-              <div style={{ padding: '0 12px 15px 12px', fontSize: '14px', lineHeight: '1.4' }}>
-                <span style={{ fontWeight: '600', marginRight: '8px' }}>{post.username}</span> 
-                {post.caption}
-              </div>
+              <strong>{post.username}</strong>
             </div>
-          ))
-        )}
-      </div>
+
+            {/* Image */}
+            <img
+              src={post.url}
+              alt="post"
+              className="post-image"
+              onDoubleClick={() => toggleLike(index)}
+            />
+
+            {/* Actions */}
+            <div
+              className="actions"
+              style={{ padding: "10px 12px", display: "flex", gap: 16 }}
+            >
+              <span onClick={() => toggleLike(index)}>
+                {likes[index] ? "❤️" : "🤍"}
+              </span>
+              <span>💬</span>
+              <span>✈️</span>
+            </div>
+
+            {/* Like text */}
+            {likes[index] && (
+              <div style={{ padding: "0 12px", fontSize: "13px", fontWeight: "600" }}>
+                Liked by you
+              </div>
+            )}
+
+            {/* Caption */}
+            <div style={{ padding: "6px 12px 14px" }}>
+              <strong>{post.username}</strong> {post.caption}
+            </div>
+          </div>
+        ))
+      )}
     </div>
   );
 }
